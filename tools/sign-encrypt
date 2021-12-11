@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+#
+# sign-encrypt - custom OP-TEE signing tool
+#
+# Copyright (C) 2021 Eric Le Bihan <eric.le.bihan.dev@free.fr>
+#
+# SPDX-License-Identifier: ISC
+#
+
+__VERSION__=0.1.1
+
+TOOL=sign_encrypt.py
+PRIV_KEY=optee.privkey.pem
+PUB_KEY=optee.pubkey.pem
+
+digest() {
+    local uuid=$1
+    local ta_elf=$2
+    local ta_dig=$3
+
+    ${TOOL} digest \
+        --uuid "${uuid}" \
+        --in "${ta_elf}" \
+        --dig "${ta_dig}" \
+        --key "${PUB_KEY}"
+}
+
+sign() {
+    local ta_dig=$1
+    local ta_sig=$2
+
+    base64 --decode "${ta_dig}" | \
+        openssl pkeyutl -sign \
+                -inkey "${PRIV_KEY}" \
+                -pkeyopt digest:sha256 \
+                -pkeyopt rsa_padding_mode:pss \
+                -pkeyopt rsa_pss_saltlen:digest \
+                -pkeyopt rsa_mgf1_md:sha256 | \
+        base64 > "${ta_sig}"
+}
+
+stitch() {
+    local uuid=$1
+    local ta_elf=$2
+    local ta_sig=$3
+    local ta_out=$4
+
+    ${TOOL} stitch \
+        --uuid "${uuid}" \
+        --in "${ta_elf}" \
+        --sig "${ta_sig}" \
+        --key "${PUB_KEY}" \
+        --out "${ta_out}"
+}
+
+usage() {
+    cat<<EOF
+Usage: $(basename "$0") [OPTIONS] <TA UUID> <TA ELF FILE>
+
+Options:
+  -h        Show this help message
+  -v        Show version information
+  -K FILE   Set path to key to use for encryption
+  -P FILE   Set path to public key
+  -T PATH   Set path to sign_encrypt.py
+EOF
+}
+
+while getopts "hvK:P:T:" option; do
+    case ${option} in
+        h)
+            usage; exit 0
+            ;;
+        v)
+            echo ${__VERSION__}; exit 0
+            ;;
+        K)
+            PRIV_KEY=${OPTARG}
+            ;;
+        P)
+            PUB_KEY=${OPTARG}
+            ;;
+        T)
+            TOOL=${OPTARG}
+            ;;
+        *)
+            echo "Unknown option" >&2; exit 1
+            ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+
+if [ $# -ne 2 ]; then
+    usage
+    exit 2
+fi
+
+uuid=$1
+ta_elf=$2
+ta_dig="$(dirname ${ta_elf})/${uuid}.dig"
+ta_sig="$(dirname ${ta_elf})/${uuid}.sig"
+ta_out="$(dirname ${ta_elf})/${uuid}.ta"
+
+
+if ! digest "${uuid}" "${ta_elf}" "${ta_dig}"; then
+    echo "ERROR: failed to digest TA ELF file" >&2
+    exit 3
+fi
+
+if ! sign "${ta_dig}" "${ta_sig}"; then
+    echo "ERROR: failed to sign digest"
+    exit 4
+fi
+
+if ! stitch "${uuid}" "${ta_elf}" "${ta_sig}" "${ta_out}"; then
+    echo "ERROR: failed to stitch signature and TA ELF file"
+    exit 5
+fi
+
+
+# vim: ts=4 sts=4 sw=4 et ai

@@ -1,0 +1,32 @@
+menuconfig BR2_PACKAGE_HELLO_TA
+	bool "hello-ta"
+	help
+	  OP-TEE Trusted Application example
+
+if BR2_PACKAGE_HELLO_TA
+
+config BR2_PACKAGE_HELLO_TA_SIGN_TA
+	bool "Sign TA with custom key"
+	help
+	  Sign the TA with a custom RSA-2048 key
+
+if BR2_PACKAGE_HELLO_TA_SIGN_TA
+
+config BR2_PACKAGE_HELLO_TA_UUID
+	string "TA UUID"
+	help
+	  UUID of the TA
+
+config BR2_PACKAGE_HELLO_TA_SIGN_TA_PRIV_KEY
+	string "Private key file"
+	help
+	  Path to private key file
+
+config BR2_PACKAGE_HELLO_TA_SIGN_TA_PUB_KEY
+	string "Public key file"
+	help
+	  Path to public key file
+
+endif
+
+endif
